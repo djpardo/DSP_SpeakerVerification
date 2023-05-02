@@ -1,4 +1,4 @@
-function c = uniqueFeatureName(afeInfo)
+function c = helperUniqueFeatureName(afeInfo)
     %UNIQUEFEATURENAME Create unique feature names
     %c = uniqueFeatureName(featureInfo) creates a unique set of feature names
     %for each element of each feature described in the afeInfo struct. The

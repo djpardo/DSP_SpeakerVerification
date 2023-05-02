@@ -1,5 +1,5 @@
 %% Manage dataset
-ads = audioDatastore('Data\Password\');
+ads = audioDatastore('..\Data\Password\');
 [~, filenames] = fileparts(ads.Files);
 ads.Labels = extractBetween(filenames, "_", "_");
 [adsTrain, adsTest] = splitEachLabel(ads, 0.8);
@@ -54,7 +54,7 @@ X = X(:,:,1);
 %% Perform feature selection
 rng('default');
 [featureSelectionIndex, featureSelectionScores] = fscmrmr(X, T);
-featurenames = uniqueFeatureName(outputMap);
+featurenames = helperUniqueFeatureName(outputMap);
 featurenamesSorted = featurenames(featureSelectionIndex);
 
 % Plot scores of all features
