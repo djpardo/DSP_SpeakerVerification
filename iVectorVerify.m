@@ -1,34 +1,13 @@
-% Download dataset from pitch tracking database
-downloadFolder = matlab.internal.examples.downloadSupportFile("audio","ptdb-tug.zip");
-dataFolder = tempdir;
-unzip(downloadFolder,dataFolder)
-dataset = fullfile(dataFolder,"ptdb-tug");
-
-% 
-ads = audioDatastore([fullfile(dataset,"SPEECH DATA","FEMALE","MIC"),fullfile(dataset,"SPEECH DATA","MALE","MIC")], ...
-                     IncludeSubfolders=true, ...
-                     FileExtensions=".wav");
-fileNames = ads.Files;
-
-% Extract speaker IDs from file names to create labels on audioDatastore
-speakerIDs = extractBetween(fileNames,"mic_","_");
-ads.Labels = categorical(speakerIDs);
-countEachLabel(ads)
-
-% Separate labels into training and evaluation sets. 
-developmentLabels = categorical(["M01","M02","M03","M04","M06","M07","M08","M09","F01","F02","F03","F04","F06","F07","F08","F09"]);
-evaluationLabels = categorical(["M05","M10","F05","F10"]);
-
-adsTrain = subset(ads,ismember(ads.Labels,developmentLabels));
-adsEvaluate = subset(ads,ismember(ads.Labels,evaluationLabels));
-
-numFilesPerSpeakerForEnrollment = 3;
-% DET - Detection Error Tradeoff
-[adsEnroll,adsTest,adsDET] = splitEachLabel(adsEvaluate,numFilesPerSpeakerForEnrollment,2);
+% Manage dataset
+ads = audioDatastore('/Users/aliciahyland/MATLAB/Projects/DSP_SpeakerVerification/Data/Password/');
+[~, filenames] = fileparts(ads.Files);
+ads.Labels = extractBetween(filenames, "_", "_");
+speakers = unique(ads.Labels);
+numSpeakers = numel(speakers);
+[adsTrain, adsEnroll, adsTest] = splitEachLabel(ads, 0.4, 0.4);
 
 countEachLabel(adsTrain)
 countEachLabel(adsEnroll)
-countEachLabel(adsDET)
 countEachLabel(adsTest)
 
 % Read audio file from training dataset and plot
@@ -96,6 +75,7 @@ parfor ii = 1:numPar
     featuresPart = cell(0,numel(adsPart.Files));
     for iii = 1:numel(adsPart.Files)
         audioData = read(adsPart);
+        audioData = audioData(:,1);
         featuresPart{iii} = helperFeatureExtraction(audioData,afe,[]);
     end
     featuresAll = [featuresAll,featuresPart];
@@ -115,7 +95,7 @@ end
 alpha = ones(1,numComponents)/numComponents;
 mu = randn(numFeatures,numComponents);
 vari = rand(numFeatures,numComponents) + eps;
-ubm = struct(ComponentProportion=alpha,mu=mu,sigma=vari);
+ubm = struct(ComponentProportion=alpha, mu=mu, sigma=sigma);
 
 % Train model with expectation-maximization algorithm
 maxIter = 10;
@@ -134,12 +114,13 @@ for iter = 1:maxIter
         adsPart = partition(adsTrain,numPar,ii);
         while hasdata(adsPart)
             audioData = read(adsPart);
+            audioData = audioData(:,1);
             
             % Extract features
-            Y = helperFeatureExtraction(audioData,afe,normFactors);
+            [features, numFeatures] = helperFeatureExtraction(audioData, afe, normFactors);
  
             % Compute a posteriori log-liklihood
-            logLikelihood = helperGMMLogLikelihood(Y,ubm);
+            logLikelihood = helperGMMLogLikelihood(features, ubm);
 
             % Compute a posteriori normalized probability
             amax = max(logLikelihood,[],1);
@@ -186,12 +167,13 @@ parfor ii = 1:numPar
     Fpart = cell(1,numFiles);
     for jj = 1:numFiles
         audioData = read(adsPart);
+        audioData = audioData(:,1);
         
         % Extract features
-        Y = helperFeatureExtraction(audioData,afe,normFactors);
+        [features, numFeatures] = helperFeatureExtraction(audioData,afe,normFactors);
         
         % Compute a posteriori log-likelihood
-        logLikelihood = helperGMMLogLikelihood(Y,ubm);
+        logLikelihood = helperGMMLogLikelihood(features, ubm);
         
         % Compute a posteriori normalized probability
         amax = max(logLikelihood,[],1);
@@ -704,6 +686,9 @@ function [features,numFrames] = helperFeatureExtraction(audioData,afe,normFactor
     % features    - matrix of features extracted
     % numFrames   - number of frames (feature vectors) returned
     
+    % Convert stereo -> mono
+    audioData = audioData(:,1);
+
     % Normalize
     audioData = audioData/max(abs(audioData(:)));
     
