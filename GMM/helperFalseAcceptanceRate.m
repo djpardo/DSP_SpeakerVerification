@@ -1,4 +1,4 @@
-function [FAR, FRR, EER] = helperVerify(adsEnroll, adsTest, afe, ubm, enrolledGMMs, thresholds, normFactors)
+function FAR = helperFalseAcceptanceRate(adsEnroll, adsTest, afe, ubm, enrolledGMMs, thresholds, normFactors)
 
     speakers = unique(adsEnroll.Labels);
     numSpeakers = numel(speakers);
@@ -6,14 +6,14 @@ function [FAR, FRR, EER] = helperVerify(adsEnroll, adsTest, afe, ubm, enrolledGM
     tic
     for speakerIdx = 1:numSpeakers
 
-        localGMM = enrolledGMMs{speakerIdx, 1}; 
-        adsTestSubset = subset(adsTest,adsTest.Labels==string(speakers(speakerIdx)));
+        localGMM = enrolledGMMs.(string(speakers{speakerIdx})); 
+        adsTestSubset = subset(adsTest, string(adsTest.Labels)~=speakers{speakerIdx});
         llrPerSpeaker = zeros(numel(adsTestSubset.Files),1);
         for fileIdx = 1:numel(adsTestSubset.Files)
             audioData = read(adsTestSubset);
             audioData = audioData(:,1);
             
-            features = helperFeatureExtraction(audioData,afe, normFactors);
+            features = helperFeatureExtraction(audioData,afe,normFactors);
             
             logLikelihood = helperGMMLogLikelihood(features,localGMM);
             Lspeaker = helperLogSumExp(logLikelihood);
@@ -28,13 +28,7 @@ function [FAR, FRR, EER] = helperVerify(adsEnroll, adsTest, afe, ubm, enrolledGM
     end
 
     llr = cat(1,llr{:});
-    FRR = mean(llr<thresholds);
     FAR = mean(llr>thresholds);
-
-    [~,EERThresholdIdx] = min(abs(FAR - FRR));
-    EERx = thresholds(EERThresholdIdx);
-    EERy = mean([FAR(EERThresholdIdx),FRR(EERThresholdIdx)]);
-    EER = [EERx, EERy];
 
 end
 

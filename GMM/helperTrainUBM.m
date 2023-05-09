@@ -1,6 +1,6 @@
 function [ubm] = helperTrainUBM(adsTrainUBM, afe, numPar, normFactors)
     % Initialize
-    numComponents = 32;
+    numComponents = 100;
     numFeatures = 13;
     alpha = ones(1,numComponents)/numComponents;
     mu = randn(numFeatures, numComponents);
@@ -8,7 +8,7 @@ function [ubm] = helperTrainUBM(adsTrainUBM, afe, numPar, normFactors)
     ubm = struct(ComponentProportion=alpha, mu=mu, sigma=sigma);
     
     % Define stopping criteria
-    maxIter = 20;
+    maxIter = 200;
     targetLogLikelihood = 0;
     tol = 0.5;
     pastL = -inf; % initialization of previous log-likelihood

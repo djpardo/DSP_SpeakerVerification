@@ -5,7 +5,7 @@ ads = audioDatastore('..\Data\Password\');
 ads.Labels = extractBetween(filenames, "_", "_");
 speakers = unique(ads.Labels);
 numSpeakers = numel(speakers);
-[adsTrainUBM, adsEnroll, adsTest] = splitEachLabel(ads, 0.4, .4);
+[adsTrainUBM, adsEnroll, adsTest] = splitEachLabel(ads, 0.4, 0.4);
 
 %% Extract features
 [audioDataUBM, audioInfo] = read(adsTrainUBM);
@@ -49,20 +49,23 @@ ubm = helperTrainUBM(adsTrainUBM, afe, numPar, normFactors);
 disp("UBM training completed in " + round(toc,2) + " seconds.")
 
 %% Enroll speakers
-enrolledGMMs = cell(numSpeakers, 1);
-parfor ii = 1:numSpeakers
-    enrolledGMMs{ii} = helperEnroll(ubm, afe, normFactors, adsEnroll);
-    enrolledGMMs{ii}.SpeakerName = string(speakers(ii));
+for ii = 1:numSpeakers
+    enrolledGMMs.(string(speakers{ii})) = helperEnroll(ubm, afe, normFactors, adsEnroll);
 end
 
 %% Get FAR, FRR, ERR and plot
 thresholds = -0.5:0.01:2.5;
-[FAR, FRR, EER] = helperVerify(adsEnroll, adsTest, afe, ubm, enrolledGMMs, thresholds, normFactors);
+FRR = helperFalseRejectionRate(adsEnroll, adsTest, afe, ubm, enrolledGMMs, thresholds, normFactors);
+FAR = helperFalseAcceptanceRate(adsEnroll, adsTest, afe, ubm, enrolledGMMs, thresholds, normFactors);
+
+[~,EERThresholdIdx] = min(abs(FAR - FRR));
+EERThreshold = thresholds(EERThresholdIdx);
+EER = mean([FAR(EERThresholdIdx),FRR(EERThresholdIdx)]);
 
 plot(thresholds,FAR,"k", ...
      thresholds,FRR,"b", ...
-     EER(1),EER(2),"ro",MarkerFaceColor="r")
-title(["Equal Error Rate = " + round(EER(2),2), "Threshold = " + round(EER(1),2)])
+     EERThreshold,EER,"ro",MarkerFaceColor="r")
+title(["Equal Error Rate = " + round(EER,2), "Threshold = " + round(EERThreshold,2)])
 xlabel("Threshold")
 ylabel("Error Rate")
 legend("False Acceptance Rate (FAR)","False Rejection Rate (FRR)","Equal Error Rate (EER)")
