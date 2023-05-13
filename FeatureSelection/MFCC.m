@@ -7,3 +7,4 @@ x = x(indeces(1):indeces(2));
 
 %% Plot MFCCs
 mfcc(x,fs)
+title("MFCCs for a Speech Sample")

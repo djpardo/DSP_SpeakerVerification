@@ -1,31 +1,11 @@
 clear;
 %% Manage dataset
-% ads = audioDatastore('temp\',Includesubfolders=true,LabelSource="folderNames");
-% ads = subset(ads,ads.Labels==categorical("stop"));
-% [~,fileName] = cellfun(@(x)fileparts(x),ads.Files,UniformOutput=false);
-% fileName = split(fileName,"_");
-% speaker = strcat("a",fileName(:,1));
-% ads.Labels = categorical(speaker);
-% numSpeakersToEnroll = 10;
-% labelCount = countEachLabel(ads);
-% forEnrollAndTestSet = labelCount{:,1}(labelCount{:,2}>=3);
-% forEnroll = forEnrollAndTestSet(randi([1,numel(forEnrollAndTestSet)],numSpeakersToEnroll,1));
-% tf = ismember(ads.Labels,forEnroll);
-% adsEnrollAndValidate = subset(ads,tf);
-% adsEnroll = splitEachLabel(adsEnrollAndValidate,2);
-% 
-% adsTest = subset(ads,ismember(ads.Labels,forEnrollAndTestSet));
-% adsTest = subset(adsTest,~ismember(adsTest.Files,adsEnroll.Files));
-% 
-% forUBMTraining = ~(ismember(ads.Files,adsTest.Files) | ismember(ads.Files,adsEnroll.Files));
-% adsTrainUBM = subset(ads,forUBMTraining);
-
 ads = audioDatastore('..\Data\Harvard\');
 [~, filenames] = fileparts(ads.Files);
 ads.Labels = extractBetween(filenames, "_", "_");
 speakers = unique(ads.Labels);
 numSpeakers = numel(speakers);
-[adsTrainUBM, adsEnroll, adsTest] = splitEachLabel(ads, 0.4, 0.4);
+[adsTrainUBM, adsEnroll, adsTest] = splitEachLabel(ads, 2, 1);
 
 %% Extract features
 [audioDataUBM, audioInfo] = read(adsTrainUBM);
@@ -66,7 +46,7 @@ normFactors.Mean = mean(allFeatures,2,"omitnan");
 normFactors.STD = std(allFeatures,[],2,"omitnan");
 
 % Initialize
-numComponents = 32;
+numComponents = 100;
 numFeatures = 13;
 alpha = ones(1,numComponents)/numComponents;
 mu = randn(numFeatures, numComponents);
@@ -188,13 +168,6 @@ for i = 1:numel(gmmCellArray)
     enrolledGMMs.(string(speakers(i))) = gmmCellArray{i};
 end
 
-
-% speakers = unique(adsEnroll.Labels);
-% numSpeakers = numel(speakers);
-% for ii = 1:numSpeakers
-%     enrolledGMMs.(string(speakers{ii})) = helperEnroll(ubm, afe, normFactors, adsEnroll);
-% end
-
 %% Get FAR, FRR, ERR and plot
 thresholds = -0.5:0.01:2.5;
 
@@ -256,11 +229,12 @@ FAR = mean(llr>thresholds);
 EERThreshold = thresholds(EERThresholdIdx);
 EER = mean([FAR(EERThresholdIdx),FRR(EERThresholdIdx)]);
 
-% Plot results
+%% Plot results
 plot(thresholds,FAR,"k", ...
      thresholds,FRR,"b", ...
      EERThreshold,EER,"ro",MarkerFaceColor="r")
-title(["Equal Error Rate = " + round(EER,2), "Threshold = " + round(EERThreshold,2)])
+title(["Utterance: The birch canoe slid on the smooth planks", ...
+    "Equal Error Rate = " + round(EER,3), "Threshold = " + round(EERThreshold,3)])
 xlabel("Threshold")
 ylabel("Error Rate")
 legend("False Acceptance Rate (FAR)","False Rejection Rate (FRR)","Equal Error Rate (EER)")

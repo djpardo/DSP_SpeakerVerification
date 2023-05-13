@@ -15,7 +15,7 @@ tiledlayout(2,2)
 nexttile
 t = (0:length(sample1)-1)/fs;
 plot(t,sample1)
-title("Speaker 1")
+title("Speaker 1 (Male)")
 xlabel("Time (s)")
 ylabel("Amplitude")
 grid minor
@@ -24,7 +24,7 @@ axis tight
 nexttile
 t = (0:length(sample2)-1)/fs;
 plot(t,sample2)
-title("Speaker 2")
+title("Speaker 2 (Female)")
 xlabel("Time (s)")
 ylabel("Amplitude")
 grid minor
