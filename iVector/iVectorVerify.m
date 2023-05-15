@@ -1,41 +1,26 @@
-% Manage dataset
-ads = audioDatastore('/Users/aliciahyland/MATLAB/Projects/DSP_SpeakerVerification/Data/Password/');
+clear;
+%% Manage dataset
+ads = audioDatastore('..\Data\Harvard\');
 [~, filenames] = fileparts(ads.Files);
 ads.Labels = extractBetween(filenames, "_", "_");
 speakers = unique(ads.Labels);
 numSpeakers = numel(speakers);
-[adsTrain, adsEnroll, adsTest] = splitEachLabel(ads, 0.4, 0.4);
+[adsTrain, adsEnroll, adsTest] = splitEachLabel(ads, 2, 1);
 
-countEachLabel(adsTrain)
-countEachLabel(adsEnroll)
-countEachLabel(adsTest)
-
-% Read audio file from training dataset and plot
+% Read audio file from training dataset
 [audio,audioInfo] = read(adsTrain);
 fs = audioInfo.SampleRate;
-t = (0:size(audio,1)-1)/fs;
-sound(audio,fs)
-
-plot(t,audio)
-xlabel("Time (s)")
-ylabel("Amplitude")
-axis([0 t(end) -1 1])
-title("Sample Utterance from Training Set")
-
-reset(adsTrain)
+reset(adsTrain);
 
 % DEVELOPMENT - speed up, reduces performance
 speedUpExample = false;
-if speedUpExample
-    adsTrain = splitEachLabel(adsTrain,30);
-end
 
 % Extract 20 MFCCs, 20 delta MFCCs, and 20 delta-delta MFCCs
-numCoeffs = 20;
+numCoeffs = 13;
 deltaWindowLength = 9;
 
-windowDuration = 0.025;
-hopDuration = 0.01;
+windowDuration = 0.03;
+hopDuration = 0.02;
 
 windowSamples = round(windowDuration*fs);
 hopSamples = round(hopDuration*fs);
@@ -46,14 +31,8 @@ afe = audioFeatureExtractor( ...
     Window=hann(windowSamples,"periodic"), ...
     OverlapLength=overlapSamples, ...
     ...
-    mfcc=true, ...
-    mfccDelta=true, ...
-    mfccDeltaDelta=true);
-setExtractorParameters(afe,"mfcc",DeltaWindowLength=deltaWindowLength,NumCoeffs=numCoeffs)
-
-% Extract the features from our training audio sample
-features = extract(afe,audio);
-[numHops,numFeatures] = size(features)
+    mfcc=true);
+setExtractorParameters(afe,"mfcc",DeltaWindowLength=deltaWindowLength,NumCoeffs=numCoeffs);
 
 % Use parallel computing on multi-core systems
 if ~isempty(ver("parallel")) && ~speedUpExample
@@ -63,7 +42,7 @@ else
     numPar = 1;
 end
 
-% Extract all features from training dataset
+%% Extract all features from training dataset
 featuresAll = {};
 tic
 parfor ii = 1:numPar
@@ -83,22 +62,16 @@ disp("Feature extraction from training set complete (" + toc + " seconds).")
 normFactors.Mean = mean(allFeatures,2,"omitnan");
 normFactors.STD = std(allFeatures,[],2,"omitnan");
 
-% Initialize Gaussian mixture model for background model
-numFeatures = 60;
-numComponents = 64;
-if speedUpExample
-    numComponents = 32;
-end
+%% Initialize Gaussian mixture model for background model
+numComponents = 100;
+numFeatures = numCoeffs;
 alpha = ones(1,numComponents) / numComponents;
 mu = randn(numFeatures, numComponents);
 vari = rand(numFeatures, numComponents) + eps;
 ubm = struct(ComponentProportion=alpha, mu=mu, sigma=vari);
 
 % Train model with expectation-maximization algorithm
-maxIter = 10;
-if speedUpExample
-    maxIter = 2;
-end
+maxIter = 20;
 tic
 for iter = 1:maxIter
     tic
@@ -148,7 +121,7 @@ for iter = 1:maxIter
     ubm.sigma = max(S./N - ubm.mu.^2,eps);
 end
 
-% Calculate zeroth and first-order Baum-Welsch statistics
+%% Calculate zeroth and first-order Baum-Welsch statistics
 numSpeakers = numel(adsTrain.Files);
 Nc = {};
 Fc = {};
@@ -197,7 +170,7 @@ end
 
 Sigma = ubm.sigma(:);
 
-% Specify dimension of total variability space
+%% Specify dimension of total variability space
 numTdim = 32;
 if speedUpExample
     numTdim = 16;
@@ -250,7 +223,7 @@ for iterIdx = 1:numIterations
     disp("Training Total Variability Space: " + iterIdx + "/" + numIterations + " complete (" + round(toc,2) + " seconds).")
 end
 
-% i-Vector extraction
+%% i-Vector extraction
 speakers = unique(adsTrain.Labels);
 numSpeakers = numel(speakers);
 ivectorPerSpeaker = cell(numSpeakers,1);
@@ -345,7 +318,7 @@ if performWCCN
     disp("WCCN projection matrix calculated (" + round(toc,4) + " seconds).")
 end
 
-% Train G-PLDA model
+%% Train G-PLDA model
 
 ivectors = cellfun(@(x)projectionMatrix*x,ivectorPerSpeaker,UniformOutput=false);
 
@@ -479,7 +452,7 @@ term1 = pinv([SigmaPlusVVt VVt;VVt SigmaPlusVVt]);
 term2 = pinv(SigmaPlusVVt);
 
 w1wt = [w1;wt];
-score = w1wt'*term1*w1wt - w1'*term2*w1 - wt'*term2*wt
+score = w1wt'*term1*w1wt - w1'*term2*w1 - wt'*term2*wt;
 
 gpldaModel = struct(mu=mu, ...
                     WhiteningMatrix=W, ...
@@ -541,7 +514,7 @@ end
 
 scoringMethod = 'GPLDA';
 
-% False rejection rate
+%% False rejection rate
 
 speakersToTest = unique(adsEnroll.Labels);
 numSpeakers = numel(speakersToTest);
@@ -589,7 +562,7 @@ parfor speakerIdx = 1:numSpeakers
 end
 disp("FRR calculated (" + round(toc,2) + " seconds).")
 
-% False acception rate
+%% False acception rate
 
 speakersToTest = unique(adsEnroll.Labels);
 numSpeakers = numel(speakersToTest);
@@ -636,7 +609,7 @@ parfor speakerIdx = 1:numSpeakers
 end
 disp("FAR calculated (" + round(toc,2) + " seconds).")
 
-% Equal error rate
+%% Equal error rate
 
 amin = min(cat(1,scoreFRR{:},scoreFAR{:}));
 amax = max(cat(1,scoreFRR{:},scoreFAR{:}));
@@ -664,93 +637,10 @@ figure
 plot(thresholdsToTest,FAR,"k", ...
      thresholdsToTest,FRR,"b", ...
      EERThreshold,EER,"ro",MarkerFaceColor="r")
-title(["Equal Error Rate = " + round(EER,4),"Threshold = " + round(EERThreshold,4)])
+title(["Utterance: The birch canoe slid on the smooth planks.", ...
+    "Equal Error Rate = " + round(EER,4),"Threshold = " + round(EERThreshold,4)])
 xlabel("Threshold")
 ylabel("Error Rate")
 legend("False Acceptance Rate (FAR)","False Rejection Rate (FRR)","Equal Error Rate (EER)",Location="best")
 grid on
 axis tight
-
-function [features,numFrames] = helperFeatureExtraction(audioData,afe,normFactors)
-    % Input:
-    % audioData   - column vector of audio data
-    % afe         - audioFeatureExtractor object
-    % normFactors - mean and standard deviation of the features used for normalization. 
-    %               If normFactors is empty, no normalization is applied.
-    %
-    % Output
-    % features    - matrix of features extracted
-    % numFrames   - number of frames (feature vectors) returned
-    
-    % Convert stereo -> mono
-    audioData = audioData(:,1);
-
-    % Normalize
-    audioData = audioData/max(abs(audioData(:)));
-    
-    % Protect against NaNs
-    audioData(isnan(audioData)) = 0;
-    
-    % Isolate speech segment
-    idx = detectSpeech(audioData,afe.SampleRate);
-    features = [];
-    for ii = 1:size(idx,1)
-        f = extract(afe,audioData(idx(ii,1):idx(ii,2)));
-        features = [features;f]; %#ok<AGROW> 
-    end
-
-    % Feature normalization
-    if ~isempty(normFactors)
-        features = (features-normFactors.Mean')./normFactors.STD';
-    end
-    features = features';
-    
-    % Cepstral mean subtraction (for channel noise)
-    if ~isempty(normFactors)
-        features = features - mean(features, "all");
-    end
-    
-    numFrames = size(features,2);
-end
-
-function L = helperGMMLogLikelihood(x, gmm)
-    permuteMu = permute(gmm.mu, [1, 3, 2]);
-    xMinusMu = repmat(x, 1, 1, numel(gmm.ComponentProportion)) - permuteMu;
-    permuteSigma = permute(gmm.sigma,[1,3,2]);
-    
-    Lunweighted = -0.5*(sum(log(permuteSigma),1) + sum(xMinusMu.*(xMinusMu./permuteSigma),1) + size(gmm.mu,1)*log(2*pi));
-    
-    temp = squeeze(permute(Lunweighted,[1,3,2]));
-    if size(temp,1)==1
-        % If there is only one frame, the trailing singleton dimension was
-        % removed in the permute. This accounts for that edge case.
-        temp = temp';
-    end
-    
-    L = temp + log(gmm.ComponentProportion)';
-end
-
-
-function score = gpldaScore(gpldaModel,w1,wt)
-% Center the data
-w1 = w1 - gpldaModel.mu;
-wt = wt - gpldaModel.mu;
-
-% Whiten the data
-w1 = gpldaModel.WhiteningMatrix*w1;
-wt = gpldaModel.WhiteningMatrix*wt;
-
-% Length-normalize the data
-w1 = w1./vecnorm(w1);
-wt = wt./vecnorm(wt);
-
-% Score the similarity of the i-vectors based on the log-likelihood.
-VVt = gpldaModel.EigenVoices * gpldaModel.EigenVoices';
-SVVt = gpldaModel.Sigma + VVt;
-
-term1 = pinv([SVVt VVt;VVt SVVt]);
-term2 = pinv(SVVt);
-
-w1wt = [w1;wt];
-score = w1wt'*term1*w1wt - w1'*term2*w1 - wt'*term2*wt;
-end
